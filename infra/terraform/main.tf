@@ -1,14 +1,20 @@
 locals {
-  project = "azure-genai-secure-landing-zone"
-  env     = "dev"
-  location = "westeurope"
+  project  = "azure-genai-secure-landing-zone"
+  env      = var.env
+  location = var.location
 
   tags = {
-    project = local.project
-    env     = local.env
-    owner   = "ig"
+    project    = local.project
+    env        = local.env
+    owner      = "ig"
     managed_by = "terraform"
   }
+}
+
+resource "azurerm_resource_group" "core" {
+  name     = "rg-genai-${local.env}"
+  location = local.location
+  tags     = local.tags
 }
 
 # Intentionally empty for now.
