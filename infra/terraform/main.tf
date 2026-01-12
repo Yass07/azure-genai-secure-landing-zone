@@ -17,6 +17,7 @@ resource "azurerm_resource_group" "core" {
   tags     = local.tags
 }
 
+
 # Intentionally empty for now.
 # Resources will be added step-by-step after:
 # - backend strategy is decided

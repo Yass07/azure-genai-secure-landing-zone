@@ -9,3 +9,12 @@ variable "env" {
   type        = string
   default     = "dev"
 }
+variable "bu" {
+  description = "Business unit (short token, lowercase)"
+  type        = string
+}
+
+variable "cost_center" {
+  description = "Cost center (short token, e.g. cc1234)"
+  type        = string
+}
