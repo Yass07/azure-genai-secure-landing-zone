@@ -48,7 +48,12 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init -reconfigure \
+          -backend-config="use_oidc=true" \
+          -backend-config="use_azuread_auth=true" \
+          -backend-config="tenant_id=${ARM_TENANT_ID}" \
+          -backend-config="client_id=${ARM_CLIENT_ID}"
 
       - name: Terraform Validate
         run: terraform validate
