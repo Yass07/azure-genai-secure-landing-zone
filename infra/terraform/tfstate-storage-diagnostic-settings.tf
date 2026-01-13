@@ -14,12 +14,13 @@ resource "azurerm_monitor_diagnostic_setting" "tfstate_sa_to_law" {
   target_resource_id         = data.azurerm_storage_account.tfstate.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
 
-  enabled_log { category = "StorageRead" }
-  enabled_log { category = "StorageWrite" }
-  enabled_log { category = "StorageDelete" }
+  metric {
+    category = "Transaction"
+    enabled  = true
+  }
 
   metric {
-    category = "AllMetrics"
+    category = "Capacity"
     enabled  = true
   }
 }
