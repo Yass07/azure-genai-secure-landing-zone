@@ -19,6 +19,14 @@ permissions:
 jobs:
   plan:
     runs-on: ubuntu-latest
+
+    env:
+      ARM_USE_AZUREAD: "true"
+      ARM_USE_OIDC: "true"
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
     defaults:
       run:
         working-directory: infra/terraform
@@ -47,5 +55,4 @@ jobs:
 
       - name: Terraform Plan (dev)
         run: terraform plan -var-file=env/dev/terraform.tfvars
-
 # trigger run
