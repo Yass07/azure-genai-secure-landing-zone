@@ -47,3 +47,5 @@ jobs:
 
       - name: Terraform Plan (dev)
         run: terraform plan -var-file=env/dev/terraform.tfvars
+
+# trigger run
