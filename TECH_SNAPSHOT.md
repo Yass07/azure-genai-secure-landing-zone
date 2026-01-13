@@ -191,7 +191,7 @@ resource "azurerm_resource_group" "core" {
 }
 
 resource "azurerm_log_analytics_workspace" "law" {
-  name                = "log-${local.project}-${local.env}"
+  name                = "kvgenai${local.env}9307"
   location            = local.location
   resource_group_name = azurerm_resource_group.core.name
   sku                 = "PerGB2018"
