@@ -14,6 +14,9 @@
 - Фиксируем факты (что реально создано) и решения (что решили и почему).
 - Минимум “магии” и предположений.
 - Всё важное документируем в двух файлах: TECH_SNAPSHOT.md и PROJECT_CONTEXT.md.
+- После локального terraform apply: commit + Sync Changes, чтобы код в GitHub соответствовал фактическому remote state.
+- GitHub Actions видит только запушенный код и не знает про локальные незакоммиченные изменения.
+
 
 ---
 
@@ -34,6 +37,10 @@
   - backend azurerm настроен, init выполнен
   - state locking работает
   - создан ресурс azurerm_resource_group.core (в Azure сейчас существует как rg-genai-dev)
+     
+- GitHub Actions plan работает через OIDC (без secrets), workflow .github/workflows/terraform-plan.yml
+- Созданы: Key Vault kvgenaidev9307, diagnostic settings baseline (KV + tfstate SA), network foundation (VNet/subnets/NSG), private DNS baseline (privatelink zones + links).
+- AI workload слой еще не начат, следующий сервис на завтра: Azure AI Search (первый шаг к RAG, дальше Azure OpenAI).
 
 ---
 
@@ -74,6 +81,8 @@
    - архитектурная схема
    - README с шагами воспроизведения
    - демонстрационный сценарий (что показать и как)
+
+
 
 ## 8) Текущий стек
 - Azure
