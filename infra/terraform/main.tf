@@ -17,6 +17,14 @@ resource "azurerm_resource_group" "core" {
   tags     = local.tags
 }
 
+resource "azurerm_log_analytics_workspace" "law" {
+  name                = "log-${local.project}-${local.env}"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.core.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = local.tags
+}
 
 # Intentionally empty for now.
 # Resources will be added step-by-step after:

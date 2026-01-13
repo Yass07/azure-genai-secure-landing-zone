@@ -32,6 +32,11 @@
 ### 2.4 tfstate blob
 - Blob key: dev/infra.terraform.tfstate
 
+### 2.5 Log Analytics Workspace
+- Name: log-azure-genai-secure-landing-zone-dev
+- RG: rg-genai-dev
+- Location: westeurope
+
 
 ## 3) Terraform backend (факты)
 - Backend type: azurerm
@@ -72,13 +77,12 @@
 
 - Git ignore (фактический контент)
     Файл: .gitignore
-
-- ```gitignore
 # Terraform
 **/.terraform/*
 *.tfstate
 *.tfstate.*
 *.tfplan
+infra/terraform/tfplan
 crash.log
 crash.*.log
 override.tf
@@ -94,6 +98,7 @@ terraform.rc
 # Local variables / secrets
 *.tfvars
 !infra/terraform/env/dev/terraform.tfvars
+infra/terraform/env/**/backend-values.txt
 
 # Editor
 .vscode/
@@ -107,8 +112,10 @@ Thumbs.db
 ## 5) Terraform state: что именно появилось в контейнере
 
 В контейнере tfstate появился blob:
+- dev/infra.terraform.tfstate
 
-dev/infra.terraform.tfstate
+- azurerm_resource_group.core
+- azurerm_log_analytics_workspace.law
 
 Источник содержимого: Terraform backend azurerm записывает state в blob при выполнении операций (после init + apply/обновления state). На текущем этапе state содержит минимум для azurerm_resource_group.core и outputs.
 
@@ -183,18 +190,26 @@ resource "azurerm_resource_group" "core" {
   tags     = local.tags
 }
 
+resource "azurerm_log_analytics_workspace" "law" {
+  name                = "log-${local.project}-${local.env}"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.core.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = local.tags
+}
 # Intentionally empty for now.
 # Resources will be added step-by-step after:
 # - backend strategy is decided
 # - auth method is decided (OIDC vs SPN vs interactive)
 # - naming convention is agreed
 
-6.6 infra/terraform/outputs.tf
+- 6.6 infra/terraform/outputs.tf
 output "env" {
   value = "dev"
 }
 
-6.7 infra/terraform/env/dev/terraform.tfvars
+- 6.7 infra/terraform/env/dev/terraform.tfvars
 env      = "dev"
 location = "westeurope"
 
