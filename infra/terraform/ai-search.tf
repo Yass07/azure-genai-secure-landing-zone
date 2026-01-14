@@ -1,7 +1,7 @@
 ############################################
 # Azure AI Search (workload step 1)
 # - Create Search service (minimal)
-# - Send metrics to LAW (metrics-only)
+# - Send metrics + logs to LAW
 ############################################
 
 resource "azurerm_search_service" "search" {
@@ -29,7 +29,15 @@ resource "azurerm_monitor_diagnostic_setting" "search_to_law" {
   target_resource_id         = azurerm_search_service.search.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
 
-  # Шаг 1: только метрики (как уже сделали для tfstate SA)
+  # Logs
+  dynamic "enabled_log" {
+    for_each = toset(data.azurerm_monitor_diagnostic_categories.search.logs)
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  # Metrics
   dynamic "metric" {
     for_each = toset(data.azurerm_monitor_diagnostic_categories.search.metrics)
     content {
