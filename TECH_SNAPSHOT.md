@@ -42,7 +42,7 @@ Diagnostic setting на tfstate storage account: категории StorageRead/
 
 
 ### 2.5 Log Analytics Workspace
-- Name: log-azure-genai-secure-landing-zone-dev
+- Name: kvgenai${local.env}9307
 - RG: rg-genai-dev
 - Location: westeurope
 
