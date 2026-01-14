@@ -43,6 +43,9 @@ resource "azurerm_subnet" "private_endpoints" {
   resource_group_name  = azurerm_resource_group.core.name
   virtual_network_name = azurerm_virtual_network.core.name
   address_prefixes     = var.subnet_private_endpoints_prefixes
+
+  # Required for Private Endpoints in this subnet
+  private_endpoint_network_policies = "Disabled"
 }
 
 resource "azurerm_network_security_group" "workload" {
