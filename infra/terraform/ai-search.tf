@@ -15,6 +15,8 @@ resource "azurerm_search_service" "search" {
   replica_count   = 1
   partition_count = 1
 
+  public_network_access_enabled = false
+
   tags = local.tags
 }
 
