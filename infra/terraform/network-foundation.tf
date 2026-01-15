@@ -1,7 +1,7 @@
 ############################################
 # Network foundation (minimal, dev)
 # - VNet
-# - Subnets: workload + private-endpoints
+# - Subnets: workload + private-endpoints + aci-test
 # - NSG per subnet + association
 ############################################
 
@@ -21,6 +21,12 @@ variable "subnet_private_endpoints_prefixes" {
   description = "Private Endpoints subnet prefixes"
   type        = list(string)
   default     = ["10.10.2.0/24"]
+}
+
+variable "subnet_aci_test_prefixes" {
+  description = "ACI test subnet prefixes (delegated to Microsoft.ContainerInstance/containerGroups)"
+  type        = list(string)
+  default     = ["10.10.3.0/28"]
 }
 
 resource "azurerm_virtual_network" "core" {
@@ -48,6 +54,23 @@ resource "azurerm_subnet" "private_endpoints" {
   private_endpoint_network_policies = "Disabled"
 }
 
+# Dedicated delegated subnet for short-lived ACI checks (DNS, connectivity)
+resource "azurerm_subnet" "aci_test" {
+  name                 = "snet-aci-test-${local.env}"
+  resource_group_name  = azurerm_resource_group.core.name
+  virtual_network_name = azurerm_virtual_network.core.name
+  address_prefixes     = var.subnet_aci_test_prefixes
+
+  delegation {
+    name = "aci-delegation"
+
+    service_delegation {
+      name    = "Microsoft.ContainerInstance/containerGroups"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/action"]
+    }
+  }
+}
+
 resource "azurerm_network_security_group" "workload" {
   name                = "nsg-workload-${local.env}"
   location            = local.location
@@ -70,4 +93,10 @@ resource "azurerm_subnet_network_security_group_association" "workload" {
 resource "azurerm_subnet_network_security_group_association" "private_endpoints" {
   subnet_id                 = azurerm_subnet.private_endpoints.id
   network_security_group_id = azurerm_network_security_group.private_endpoints.id
+}
+
+# Reuse workload NSG for the ACI test subnet
+resource "azurerm_subnet_network_security_group_association" "aci_test" {
+  subnet_id                 = azurerm_subnet.aci_test.id
+  network_security_group_id = azurerm_network_security_group.workload.id
 }

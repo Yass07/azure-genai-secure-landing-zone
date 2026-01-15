@@ -1,126 +1,97 @@
 # PROJECT_CONTEXT.md — Azure AI Landing Zone (Terraform)
+# PROJECT_CONTEXT.md - Azure GenAI Secure Landing Zone (Terraform)
 
-## 1) Цель
+## 1) Зачем проект
 Собрать один enterprise-style use case в Azure, который можно показывать на интервью как доказательство практических навыков:
-- Azure platform fundamentals (subscriptions, providers, RBAC по мере необходимости)
-- Terraform (структура, backend, state, locking, воспроизводимость)
-- Security-first подход (диагностика, приватность, минимум публичных экспозиций)
-- Связь с Microsoft AI треком (целевая прикладная часть позже: Azure AI / GenAI workload)
+- Terraform с remote backend, state, locking, воспроизводимость
+- Security-first и private-by-default (минимум публичных экспозиций)
+- Networking foundation (VNet, subnets, NSG, Private DNS)
+- Observability baseline (Log Analytics + diagnostic settings)
+- AI workload слой поверх foundation (Azure AI Search и далее по треку)
+- CI/CD через GitHub Actions с OIDC (без секретов)
 
----
+## 2) Ключевые принципы работы
+- Двигаемся микро-шагами, по одному изменению за раз.
+- Фиксируем только проверенные факты: что реально создано, что реально работает.
+- Никакой "магии": если есть развилка, выбираем самый быстрый и надежный путь.
+- Terraform используем там, где это дает пользу для IaC и сертификации. Разовые вещи можно делать через Portal/CLI.
+- Без длинных тире.
 
-## 2) Ключевые принципы
-- Пошагово, один шаг за раз.
-- Фиксируем факты (что реально создано) и решения (что решили и почему).
-- Минимум “магии” и предположений.
-- Всё важное документируем в двух файлах: TECH_SNAPSHOT.md и PROJECT_CONTEXT.md.
-- После локального terraform apply: commit + Sync Changes, чтобы код в GitHub соответствовал фактическому remote state.
-- GitHub Actions видит только запушенный код и не знает про локальные незакоммиченные изменения.
-
-
----
-
-## 3) Контекст сертификации AI
-Проект задуман как практическая база под AI-направление Microsoft (в т.ч. AZ-AI-102 как целевая сертификация для роли Azure AI Engineer), но реализуется инженерно правильно: сначала foundation (landing zone), затем AI workload слой.
-
----
+## 3) Контекст подписки (факты)
+- Текущая рабочая подписка: `Azure-genai-demo`
+- QuotaId: `PayAsYouGo_2014-09-01`
+- SpendingLimit: `Off`
+- Попытка найти другую "free trial" подписку через CLI не дала результата. Во втором tenant была ошибка "tenant blocked due to inactivity".
 
 ## 4) Текущее состояние проекта (факты)
-Создано и подтверждено:
-- Azure subscription: Azure-genai-demo
-- Remote Terraform backend:
-  - rg-tfstate-genai-dev
-  - sttfstategenai9307
-  - container tfstate
-  - blob dev/infra.terraform.tfstate
-- Terraform:
-  - backend azurerm настроен, init выполнен
-  - state locking работает
-  - создан ресурс azurerm_resource_group.core (в Azure сейчас существует как rg-genai-dev)
-     
-- GitHub Actions plan работает через OIDC (без secrets), workflow .github/workflows/terraform-plan.yml
-- Созданы: Key Vault kvgenaidev9307, diagnostic settings baseline (KV + tfstate SA), network foundation (VNet/subnets/NSG), private DNS baseline (privatelink zones + links).
-- AI workload слой еще не начат, следующий сервис на завтра: Azure AI Search (первый шаг к RAG, дальше Azure OpenAI).
+Создано и подтверждено в Azure (westeurope):
+- Remote Terraform backend (tfstate): `rg-tfstate-genai-dev`, storage `sttfstategenai9307`, container `tfstate`, blob `dev/infra.terraform.tfstate`
+- Core RG: `rg-genai-dev`
+- Log Analytics Workspace: `log-azure-genai-secure-landing-zone-dev`
+- Network foundation:
+  - VNet `vnet-genai-dev`
+  - Subnets `snet-workload-dev`, `snet-private-endpoints-dev`
+  - NSG `nsg-workload-dev`, `nsg-private-endpoints-dev` + associations
+- Private DNS baseline + VNet links:
+  - `privatelink.blob.core.windows.net`
+  - `privatelink.vaultcore.azure.net`
+  - `privatelink.openai.azure.com`
+  - `privatelink.search.windows.net`
+- Key Vault: `kvgenaidev9307`
+- Azure AI Search:
+  - service `srchgenaidev9307` (basic)
+  - public network access disabled
+  - private endpoint `pe-search-dev` + DNS zone group
 
----
+Что важно:
+- Test VM пытались создать, но в westeurope уперлись в ограничения SKU/capacity/quota. Файл VM переведен в disabled, чтобы не ломать plan/apply.
 
-## 5) Строгий naming (решение)
-Принято:
-- domain: genai
-- bu = itops
-- cost_center = cc0001
-- region short для westeurope: weu
+## 5) Что не тащим в Terraform (решение)
+- Бюджет создан через Azure Portal (не через Terraform).
+- Цель: минимизировать трение и не усложнять IaC там, где это не дает ценности.
 
-Важно:
-- Для storage accounts применяем укороченный вариант из-за ограничений Azure.
-- Текущий bootstrap storage account (sttfstategenai9307) сохраняется как исторический и не переименовывается.
+## 6) Структура репозитория и где "истина"
+Путь репозитория:
+- `C:\Users\ijask_jid\OneDrive\Desktop\Repos\azure-genai-secure-landing-zone`
 
----
+Главные документы проекта:
+- `PROJECT_PREAMBLE.md` - зачем проект и стиль работы
+- `PROJECT_CONTEXT.md` - что это такое и как продолжаем
+- `TECH_SNAPSHOT.md` - фактическое текущее состояние (ресурсы, артефакты, результаты)
 
-## 6) Организация многодневной работы (без потери контекста)
-- Каждый день новый чат в ChatGPT Project.
-- В начале дня: прикреплены TECH_SNAPSHOT.md и PROJECT_CONTEXT.md и используются как источник правды.
-- В конце дня: обновляем оба файла и повторно прикрепляем их в проект.
+Terraform рабочая папка:
+- `infra/terraform`
 
----
+## 7) Terraform layout: текущая логика
+- Пока используем плоскую структуру `.tf` файлов в `infra/terraform` по доменам (network, dns, ai-search, diagnostics).
+- Директория `infra/terraform/modules` оставлена под будущие reusable-модули, но сейчас не является обязательной.
+- В репозитории есть "disabled" файлы, которые не должны попадать в план:
+  - `cost-budget.tf.disabled`
+  - `test-vm.tf.disabled`
 
-## 7) Roadmap (высокоуровнево)
-1) Стабилизировать foundation (landing zone минимум):
-   - Log Analytics workspace
-   - Diagnostic settings baseline
-   - Key Vault (если нужно)
-   - VNet/subnets/NSG
-   - Private endpoints там, где уместно
-2) Определить и реализовать AI workload слой:
-   - безопасный доступ (private networking, identities)
-   - минимум публичных экспозиций
-3) CI/CD:
-   - GitHub Actions
-   - OIDC вместо секретов (по возможности)
-4) Финальная “интервью-упаковка”:
-   - архитектурная схема
-   - README с шагами воспроизведения
-   - демонстрационный сценарий (что показать и как)
+## 8) CI/CD: GitHub Actions (OIDC)
+- Workflow: `.github/workflows/terraform-plan.yml`
+- Триггеры: `push`/`pull_request` на `main` с путями `infra/terraform/**`
+- Делает: `terraform init`, `terraform validate`, `terraform plan`
+- Авторизация: `azure/login@v2` по OIDC, без секретов
 
+## 9) Рабочий дневной цикл (обязательное правило проекта)
+- После успешного локального `terraform apply` (через VS Code Tasks):
+  - всегда делаем `git commit` + `Sync Changes`
+  - затем проверяем, что GitHub Actions workflow (terraform plan) прошел успешно
+- Переходим к следующему шагу только после подтверждения, что локальный apply успешен и workflow успешен.
 
+## 10) Известные блокеры и наблюдения (факты)
+- Создание VM в `westeurope` неоднократно упиралось в SKU availability / quota семейства. Поэтому VM исключена из Terraform на текущем этапе.
+- Для VM был сгенерирован SSH ключ:
+  - `~\.ssh\genai_testvm` и `~\.ssh\genai_testvm.pub`
 
-## 8) Текущий стек
-- Azure
-- Terraform
-- Azure CLI
-- VS Code
-- GitHub   
+## 11) Roadmap (кратко)
+1) Стабилизация foundation (networking, private dns, observability, diagnostics)
+2) Расширение AI workload слоя (private endpoints, identity, доступы)
+3) Улучшение воспроизводимости (inputs через tfvars, минимизация ручных правок)
+4) "Интервью-упаковка": README, архитектурная схема, демонстрационный сценарий
 
-## 9) Архитектурная идея
-
-Проект строится как Azure AI Landing Zone:
-
-- базовый слой (bootstrap)
-- security baseline
-- networking
-- observability
-- identity
-- AI workload слой
-- CI/CD
-
----
-
-## 10) Что сейчас важно
-Это не “поиграться с AI”, а построить архитектуру.
-AI — это workload, а не центр вселенной.
-Центр — платформа.
-
----
-
-## 11) Документы системы
-
-Проект всегда опирается на три файла:
-
-1) PROJECT_PREAMBLE.md - зачем мы это делаем
-2) PROJECT_CONTEXT.md - что это такое
-3) TECH_SNAPSHOT.md - что уже сделано
-
-## 12) Договоренности по стилю
 
 - Язык ответа = язык вопроса.
 - Без домыслов.

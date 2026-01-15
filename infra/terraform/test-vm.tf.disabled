@@ -1,0 +1,54 @@
+############################################
+# Test VM in VNet (for private access checks)
+# - No Public IP
+# - SSH key auth only
+############################################
+
+locals {
+  testvm_name = "vm-test-${local.env}"
+}
+
+resource "azurerm_network_interface" "testvm" {
+  name                = "nic-${local.testvm_name}"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.core.name
+  tags                = local.tags
+
+  ip_configuration {
+    name                          = "ipconfig1"
+    subnet_id                     = azurerm_subnet.workload.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "testvm" {
+  name                = local.testvm_name
+  resource_group_name = azurerm_resource_group.core.name
+  location            = local.location
+  size                = "Standard_DS1_v2"
+  tags                = local.tags
+
+  network_interface_ids = [
+    azurerm_network_interface.testvm.id
+  ]
+
+  admin_username                  = "azureuser"
+  disable_password_authentication = true
+
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDU2ynkkaZmHm7AXjfmvzCpySnN1atN/6s1P93Qp+BWotB0vGPy7pXEMVaS0N3Ntf6+KiQ/sERG5s+t0ilEuwEFR5La2KWvrwVENaswW1XR2wR27OCnEFrFfgHfFG8qpvXJQrM1SWwi1edpdWdu8Iza0LkaCcVo8l1kEtrhcEp7gM4lphhmXdnup3caRatvOEX8n7jdygAtoVP43Fn+CM6qYckp5Z1mphNDLCpgtRu9bL/U8hzxW0f4lBr8en/gHRrdBcSoy5qVo6vWVKzGf/Un2vhiZ2kz4LZUkoZ/IIRSFcg0byNlYVXTn69gw3JJyEH/zRyEA2l8wkSB33ArkloG4lAdnmf27rqIm92I0iAByMqGY7atoRk6sznJ6efp+zX+9RTSK+nzAClwxKD3rQWiBrZ/8PO+c5tFChmh/h1v2hJd6R2atm/MNnV2JKNi8HGRbsFHEgrWcylvAdvxS31PETzwsTQLNWfLCEfCsCEa02oDMMBVSJDvT1ypq0n+ixf/wIiF7I6xmdz/Sr0VWovSlfxzhOi1k4+CS9CUTfj/fYsNibb6Pb/NaxVqOzgPAX8pI+Vn/KzT/BZ056JbT5/zvb/hhEw9myVG7jqTkIFeEG2wyK1ep14GuSCouu8cU8AYseOf0mav6FcVBfiFZdp2/2zV9NBQY/FKK5lGylzhuw== ijask_jid@YassMi-Notebook"
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+}

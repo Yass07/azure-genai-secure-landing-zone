@@ -17,6 +17,8 @@
 
 ## 2) Azure Resources (фактически существуют)
 
+## 2) Azure Resources (фактически существуют)
+
 ### 2.1 Resource Groups
 - rg-tfstate-genai-dev (westeurope)
 - rg-genai-dev (westeurope)
@@ -27,42 +29,80 @@
 - Location: westeurope
 - Kind: StorageV2
 - SKU: Standard_LRS
-
-### 2.3 Storage Container
 - Container: tfstate
-Diagnostic setting на tfstate storage account: категории StorageRead/Write/Delete не поддерживаются. Исправили на metrics-only (Transaction, Capacity)
+- Blob key (state): dev/infra.terraform.tfstate
+- Diagnostics: metrics-only (Transaction, Capacity). Categories StorageRead/Write/Delete not supported for this account.
 
-### 2.4 tfstate blob
-- Blob key: dev/infra.terraform.tfstate
-
-    # Terraform state storage
-- Storage account: sttfstategenai9307
-- Container: tfstate
-- Blob key: dev/infra.terraform.tfstate
-
-
-### 2.5 Log Analytics Workspace
-- Name: kvgenai${local.env}9307
+### 2.3 Log Analytics Workspace
+- Name: log-azure-genai-secure-landing-zone-dev
 - RG: rg-genai-dev
 - Location: westeurope
+
+### 2.4 Network Foundation
+- VNet: vnet-genai-dev (rg-genai-dev, westeurope)
+- Subnet: snet-workload-dev
+- Subnet: snet-private-endpoints-dev
+  - private_endpoint_network_policies = Disabled
+- NSG: nsg-workload-dev (associated to snet-workload-dev)
+- NSG: nsg-private-endpoints-dev (associated to snet-private-endpoints-dev)
+
+### 2.5 Private DNS Zones + VNet Links
+- privatelink.blob.core.windows.net
+  - link: vnetlink-blob-dev
+- privatelink.vaultcore.azure.net
+  - link: vnetlink-keyvault-dev
+- privatelink.openai.azure.com
+  - link: vnetlink-openai-dev
+- privatelink.search.windows.net
+  - link: vnetlink-search-dev
+
+### 2.6 Key Vault
+- Name: kvgenaidev9307 (rg-genai-dev)
+
+### 2.7 Azure AI Search
+- Search service: srchgenaidev9307 (SKU: basic)
+- Public network access: Disabled
+
+### 2.8 Private Endpoint (Azure AI Search)
+- Private Endpoint: pe-search-dev (rg-genai-dev)
+- Target: srchgenaidev9307
+- Subresource: searchService
+- Private DNS zone group: pdzg-search-dev -> privatelink.search.windows.net
+- Private DNS A record auto-created via PE: srchgenaidev9307 (privatelink.search.windows.net)
+
+### 2.9 Observability (Diagnostic settings -> LAW)
+- tfstate Storage Account -> LAW
+- Key Vault -> LAW
+- Azure AI Search -> LAW
+
+### 2.10 Test VM (attempted)
+- NIC: nic-vm-test-dev (rg-genai-dev)
+- VM: vm-test-dev not created (deployment failed). NIC exists.
+
+### 2.11 Network Watcher
+- Network Watcher: enabled/present for region westeurope (Azure-managed, typically in NetworkWatcherRG)
+
 
 
 ## 3) Terraform backend (факты)
 - Backend type: azurerm
-- Backend storage:
+- Backend scope: subscription (Azure-genai-demo)
+- Backend storage (tfstate):
   - resource_group_name: rg-tfstate-genai-dev
   - storage_account_name: sttfstategenai9307
   - container_name: tfstate
   - key: dev/infra.terraform.tfstate
-- State locking: работает (наблюдалось “Acquiring state lock”)
+- Auth: Entra ID (use_oidc=true + use_azuread_auth=true)
+- State locking: работает (наблюдалось "Acquiring state lock")
 
 
-## 4) Репозиторий — структура (tree)
+## 4) Репозиторий - структура (tree)
+
 Путь репозитория:
 - C:\Users\ijask_jid\OneDrive\Desktop\Repos\azure-genai-secure-landing-zone
 
-структура:
-.azure-genai-secure-landing-zone
+Структура:
+AZURE-GENAI-SECURE-LANDING-ZONE
 ├─ .github/
 │  └─ workflows/
 │     └─ terraform-plan.yml
@@ -72,6 +112,13 @@ Diagnostic setting на tfstate storage account: категории StorageRead/
 │  └─ terraform/
 │     ├─ .terraform/
 │     │  ├─ providers/
+│     │  │  └─ registry.terraform.io/
+│     │  │     └─ hashicorp/
+│     │  │        └─ azurerm/
+│     │  │           └─ 3.117.1/
+│     │  │              └─ windows_amd64/
+│     │  │                 ├─ LICENSE.txt
+│     │  │                 └─ terraform-provider-azurerm_v3.117.1_x5.exe
 │     │  └─ terraform.tfstate
 │     ├─ env/
 │     │  └─ dev/
@@ -79,13 +126,17 @@ Diagnostic setting на tfstate storage account: категории StorageRead/
 │     │     └─ terraform.tfvars
 │     ├─ modules/
 │     ├─ .terraform.lock.hcl
+│     ├─ ai-search-private-endpoint.tf
+│     ├─ ai-search.tf
 │     ├─ backend.tf
+│     ├─ cost-budget.tf.disabled
 │     ├─ kv-diagnostic-settings.tf
 │     ├─ main.tf
 │     ├─ network-foundation.tf
 │     ├─ outputs.tf
 │     ├─ private-dns.tf
 │     ├─ providers.tf
+│     ├─ test-vm.tf.disabled
 │     ├─ tfplan
 │     ├─ tfstate-storage-diagnostic-settings.tf
 │     ├─ variables.tf
@@ -97,6 +148,41 @@ Diagnostic setting на tfstate storage account: категории StorageRead/
 ├─ README.md
 ├─ TECH_SNAPSHOT.md
 └─ VSC Default JSON settings.md
+
+
+Git ignore (фактический контент)
+Файл: .gitignore
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/terraform/tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Terraform lock file (keep it)
+!.terraform.lock.hcl
+
+# Local variables / secrets
+*.tfvars
+!infra/terraform/env/dev/terraform.tfvars
+infra/terraform/env/**/backend-values.txt
+
+# Editor
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
 
 
 - Git ignore (фактический контент)
@@ -132,16 +218,38 @@ infra/terraform/env/**/backend-values.txt
 .DS_Store
 Thumbs.db
 
+## 5) Terraform state - что именно появилось в контейнере
 
-## 5) Terraform state: что именно появилось в контейнере
-
-В контейнере tfstate появился blob:
+Backend container: tfstate
+Blob:
 - dev/infra.terraform.tfstate
 
+State содержит (минимум по факту refresh/планов):
 - azurerm_resource_group.core
 - azurerm_log_analytics_workspace.law
+- azurerm_virtual_network.core
+- azurerm_subnet.workload
+- azurerm_subnet.private_endpoints
+- azurerm_network_security_group.workload
+- azurerm_network_security_group.private_endpoints
+- azurerm_subnet_network_security_group_association.workload
+- azurerm_subnet_network_security_group_association.private_endpoints
+- azurerm_private_dns_zone.core["blob"]
+- azurerm_private_dns_zone.core["keyvault"]
+- azurerm_private_dns_zone.core["openai"]
+- azurerm_private_dns_zone.core["search"]
+- azurerm_private_dns_zone_virtual_network_link.core["blob"]
+- azurerm_private_dns_zone_virtual_network_link.core["keyvault"]
+- azurerm_private_dns_zone_virtual_network_link.core["openai"]
+- azurerm_private_dns_zone_virtual_network_link.core["search"]
+- azurerm_key_vault.kv
+- azurerm_search_service.search
+- azurerm_private_endpoint.search
+- azurerm_monitor_diagnostic_setting.tfstate_sa_to_law
+- azurerm_monitor_diagnostic_setting.kv_to_law
+- azurerm_monitor_diagnostic_setting.search_to_law
+- azurerm_network_interface.testvm (NIC создан, VM не создана из-за ограничений по SKU/квотам)
 
-Источник содержимого: Terraform backend azurerm записывает state в blob при выполнении операций (после init + apply/обновления state). На текущем этапе state содержит минимум для azurerm_resource_group.core и outputs.
 
 ## 6) Terraform files (полные тексты)
 - 6.1 infra/terraform/backend.tf
@@ -474,26 +582,4 @@ jobs:
   - Storage Blob Data Contributor
 - Примечание: backend должен работать без listKeys. Раньше был 403 на listKeys, ушли на Entra ID auth путь.
 
-
-### 8) Key Vault
-- kvgenaidev9307 (rg-genai-dev)
-
-### 9) Monitor diagnostic settings (созданы)
-- diag-kv-dev-law (Key Vault -> Log Analytics)
-- diag-tfstate-sa-dev-law (tfstate storage account -> Log Analytics, metrics: Transaction, Capacity)
-
-### 10)Network foundation (создано)
-- vnet-genai-dev
-- snet-workload-dev
-- snet-private-endpoints-dev
-- nsg-workload-dev + association
-- nsg-private-endpoints-dev + association
-
-### 11) Private DNS baseline (создано)
-- privatelink.vaultcore.azure.net + vnet link
-- privatelink.blob.core.windows.net + vnet link
-- privatelink.search.windows.net + vnet link
-- privatelink.openai.azure.com + vnet link
-
-
-
+Примечание: фактический список Azure ресурсов и их атрибуты - см. раздел 2.

@@ -1,0 +1,51 @@
+############################################
+# Cost guardrail (subscription budget)
+# - PayAsYouGo + spendingLimit Off
+# - Budget to alert on any spend
+############################################
+
+resource "azurerm_consumption_budget_subscription" "sub_budget" {
+  name            = "budget-${local.project}-${local.env}"
+  subscription_id = data.azurerm_client_config.current.subscription_id
+
+  amount     = 5
+  time_grain = "Monthly"
+
+  time_period {
+    start_date = "2026-01-01T00:00:00Z"
+  }
+
+  # Alert at 50%, 80%, 100% of budget
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 50
+    threshold_type = "Actual"
+
+    contact_emails = [
+      "i.jaskelevic@outlook.com",
+    ]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 80
+    threshold_type = "Actual"
+
+    contact_emails = [
+      "i.jaskelevic@outlook.com",
+    ]
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = 100
+    threshold_type = "Actual"
+
+    contact_emails = [
+      "i.jaskelevic@outlook.com",
+    ]
+  }
+}
