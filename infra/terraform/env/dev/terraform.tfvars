@@ -1,4 +1,5 @@
-env         = "dev"
-location    = "westeurope"
-bu          = "itops"
-cost_center = "cc0001"
+env           = "dev"
+location      = "westeurope"
+bu            = "itops"
+cost_center   = "cc0001"
+enable_search = false
