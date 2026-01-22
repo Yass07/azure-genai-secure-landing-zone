@@ -5,6 +5,7 @@
 ############################################
 
 resource "azurerm_private_endpoint" "search" {
+  count               = var.enable_search ? 1 : 0
   name                = "pe-search-${local.env}"
   resource_group_name = azurerm_resource_group.core.name
   location            = local.location
@@ -12,11 +13,9 @@ resource "azurerm_private_endpoint" "search" {
 
   private_service_connection {
     name                           = "psc-search-${local.env}"
-    private_connection_resource_id = azurerm_search_service.search.id
+    private_connection_resource_id = azurerm_search_service.search[0].id
     is_manual_connection           = false
-
-
-    subresource_names = ["searchService"]
+    subresource_names              = ["searchService"]
   }
 
   private_dns_zone_group {
