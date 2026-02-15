@@ -1,0 +1,10 @@
+Показывает, существует ли Search service в RG:
+az resource list -g rg-genai-dev --resource-type Microsoft.Search/searchServices --query "[].{name:name,id:id}" -o table
+
+Аналогично для Private Endpoint:
+az resource list -g rg-genai-dev --resource-type Microsoft.Network/privateEndpoints --query "[?contains(name,'pe-search')].{name:name,id:id}" -o table
+
+Значение enable_search в конфигурации (tfvars)
+В PowerShell:
+
+Select-String -Path infra/terraform/env/dev/terraform.tfvars -Pattern '^\s*enable_search\s*='
