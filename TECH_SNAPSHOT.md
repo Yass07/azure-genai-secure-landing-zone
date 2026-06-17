@@ -7,7 +7,7 @@
 - Foundation слои применены: observability baseline, network foundation, private DNS baseline.
 - AI workload слой: начат и расширен.
   - Azure AI Search: сейчас **выключен** (`enable_search=false`), ресурс Search в Azure отсутствует. При включении создается private Search + PE + diagnostics.
-  - Azure OpenAI (private) развернут + Private Endpoint + DNS zone group + diagnostics.
+  - Azure OpenAI (private) развернут + diagnostics. Private Endpoints (OpenAI + RAG blob) вынесены под feature-flag `enable_private_endpoints`, сейчас **выключены** (`= false`) для экономии - см. раздел 10.
 - Практическая проверка private connectivity (без VM) выполнялась через ACI (временный diagnostic compute):
   - DNS резолв и TCP 443 до Azure AI Search private endpoint **были подтверждены ранее**, когда Search был включен.
   - DNS резолв Azure OpenAI в private IP подтвержден изнутри VNet.
@@ -83,6 +83,7 @@
 - Примечание: Доступность kind/SKU проверена в westeurope через Azure CLI.
 
 ### 2.10 Private Endpoint (Azure OpenAI)
+- Статус: **выключен через feature-flag** (`enable_private_endpoints = false`), pe-openai-dev в Azure отсутствует. Конфигурация ниже создаётся при `enable_private_endpoints = true`.
 - Private Endpoint: pe-openai-dev
 - Target: oaigenaidev9307
 - Subresource: account
@@ -200,7 +201,7 @@ Backend container: tfstate
 Blob:
 - dev/infra.terraform.tfstate
 
-State содержит (актуально после выключения Search через `enable_search=false`):
+State содержит (актуально после выключения Search `enable_search=false` и Private Endpoints `enable_private_endpoints=false`):
 - data.azurerm_client_config.current
 - data.azurerm_monitor_diagnostic_categories.kv
 - data.azurerm_monitor_diagnostic_categories.openai
@@ -224,8 +225,6 @@ State содержит (актуально после выключения Searc
 - azurerm_private_dns_zone_virtual_network_link.core["keyvault"]
 - azurerm_private_dns_zone_virtual_network_link.core["openai"]
 - azurerm_private_dns_zone_virtual_network_link.core["search"]
-- azurerm_private_endpoint.openai
-- azurerm_private_endpoint.rag_docs_blob
 - azurerm_resource_group.core
 - azurerm_storage_account.rag_docs
 - azurerm_subnet.aci_test
@@ -842,3 +841,20 @@ resource "azurerm_private_endpoint" "search" {
 
   tags = local.tags
 }
+
+## 10) Day 5 - Cost control: Private Endpoints (OpenAI + RAG)
+
+- Контекст: инвойс G163831783 (период 01-31.05.2026) показал сетевой расход - Virtual Network Private Link ~CHF 11.75 и Azure DNS Private ~CHF 1.57. Основная статья - всегда-онлайн Private Endpoints.
+- Введён feature-flag `enable_private_endpoints` (в `variables.tf`, default `true`; в `env/dev/terraform.tfvars` = `false`). Через `count` гейтит два PE: `azurerm_private_endpoint.openai` (pe-openai-dev) и `azurerm_private_endpoint.rag_docs_blob` (pe-st-docs-dev).
+- Применено через VS Code Run Tasks: `plan` = `0 to add, 0 to change, 2 to destroy`, `apply` = `0 added, 0 changed, 2 destroyed`. Оба PE в Azure отсутствуют.
+- НЕ трогали: Private DNS зоны и VNet links (остаются, стоят копейки), OpenAI account, RAG storage, KV, сеть, diagnostics.
+- Обратно: `enable_private_endpoints = true` + `plan/apply`.
+- GitHub: коммит `74a0d9b` ("Budget correction, Disable private endpoints"), terraform-plan run #29 = Success, plan = "No changes" (код и стейт сошлись).
+- Изменённые файлы: `variables.tf`, `azure-openai-private-endpoint.tf`, `rag-storage-docs.tf`, `env/dev/terraform.tfvars`.
+
+### 10a) Фиксы VS Code tasks.json (локальный, в .gitignore)
+- После миграции ноутбука у тасков терраформа был потерян `options.cwd`, и они выполнялись в корне репо (`init` -> "empty directory", `validate` -> ложный Success на пустом каталоге). Восстановлено: `options.cwd = ${workspaceFolder}/infra/terraform` добавлен на верхнем уровне tasks.json (применяется ко всем таскам).
+- Таски `plan` падали в PowerShell с "Too many command line arguments" из-за флагов формы `-var-file=...`/`-out=...`. Переписаны без `=` (`-var-file env/dev/terraform.tfvars -out tfplan`). CI (bash) это не затрагивает.
+
+### 10b) Раздел 6 устарел
+- Встроенные тексты TF-файлов в разделе 6 расходятся с реальными (порядок аргументов, шапки-комментарии, `local.env` vs `var.env`, отсутствуют feature-flags). Источник истины - файлы в `infra/terraform`, не раздел 6.
