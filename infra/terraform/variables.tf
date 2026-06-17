@@ -24,3 +24,11 @@ variable "enable_search" {
   description = "Feature flag: enable or disable Azure AI Search and its dependent resources (PE, diagnostics)."
   default     = true
 }
+
+# Feature flag: allow turning Private Endpoints on/off to control cost
+variable "enable_private_endpoints" {
+  type        = bool
+  description = "Feature flag: enable or disable OpenAI and RAG-storage Private Endpoints to control cost."
+  default     = true
+}
+# pipeline-smoke-test: laptop-migration

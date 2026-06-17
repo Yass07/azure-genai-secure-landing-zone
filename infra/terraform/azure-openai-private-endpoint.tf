@@ -1,4 +1,5 @@
 resource "azurerm_private_endpoint" "openai" {
+  count               = var.enable_private_endpoints ? 1 : 0
   name                = "pe-openai-${local.env}"
   location            = local.location
   resource_group_name = azurerm_resource_group.core.name

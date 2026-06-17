@@ -6,12 +6,12 @@
 - GitHub Actions: workflow plan работает через OIDC без секретов.
 - Foundation слои применены: observability baseline, network foundation, private DNS baseline.
 - AI workload слой: начат и расширен.
-  - Azure AI Search: сейчас **выключен** (`enable_search=false`), ресурс Search в Azure отсутствует. При включении создается private Search + PE + diagnostics.
+  - Azure AI Search (private) развернут + Private Endpoint + DNS zone group + diagnostics.
   - Azure OpenAI (private) развернут + Private Endpoint + DNS zone group + diagnostics.
-- Практическая проверка private connectivity (без VM) выполнялась через ACI (временный diagnostic compute):
-  - DNS резолв и TCP 443 до Azure AI Search private endpoint **были подтверждены ранее**, когда Search был включен.
-  - DNS резолв Azure OpenAI в private IP подтвержден изнутри VNet.
-  - TCP 443 до Azure OpenAI private endpoint подтвержден изнутри VNet.
+- Практическая проверка private connectivity выполнена (без VM):
+  - DNS резолв Azure AI Search в private IP подтвержден изнутри VNet.
+  - TCP 443 до Azure AI Search private endpoint подтвержден изнутри VNet.
+- Временный egress для ACI (NAT Gateway + Public IP) применялся на время диагностики и затем удален.
 - Диагностический subnet для ACI оставлен как постоянный инструмент для проверок.
 
 ## 1) Azure Identity (факты)
@@ -67,14 +67,19 @@
 - Name: kvgenaidev9307 (rg-genai-dev)
 
 ### 2.7 Azure AI Search
+- Search service: srchgenaidev9307 (SKU: basic)
+- Public network access: Disabled
+- Проверка изнутри VNet (через ACI exec):
+  - DNS: srchgenaidev9307.search.windows.net -> CNAME srchgenaidev9307.privatelink.search.windows.net -> A 10.10.2.4
+  - TCP: 443 open до srchgenaidev9307.search.windows.net (10.10.2.4)
 
-- Статус: **выключен через Terraform feature-flag** (`enable_search = false`), ресурс Search в Azure отсутствует (проверка `az search service show ...` возвращает ResourceNotFound).
-- Когда нужен: включаем `enable_search = true` и делаем `plan/apply` (через VS Code Run Tasks). Тогда создается Search service `srchgenaidev9307` (SKU `basic`, `replica_count=1`, `partition_count=1`) с `public_network_access_enabled = false`.
-- Причина выключения: это был основной потребитель бюджета на текущем этапе проекта (cost analysis в Portal).
 ### 2.8 Private Endpoint (Azure AI Search)
+- Private Endpoint: pe-search-dev (rg-genai-dev)
+- Target: srchgenaidev9307
+- Subresource: searchService
+- Private DNS zone group: pdzg-search-dev -> privatelink.search.windows.net
+- Private DNS A record auto-created via PE: srchgenaidev9307 (privatelink.search.windows.net)
 
-- Статус: **выключен вместе с Search**. Private Endpoint `pe-search-dev` в Azure отсутствует (ResourceNotFound).
-- Private DNS Zone `privatelink.search.windows.net` и VNet link оставлены в state (их можно держать постоянно, они почти не стоят).
 ### 2.9 Azure OpenAI (Cognitive Services - kind OpenAI)
 - Account: oaigenaidev9307
 - Kind: OpenAI
@@ -89,14 +94,11 @@
 - Private DNS zone group: pdzg-openai-dev -> privatelink.openai.azure.com
 
 ### 2.11 Observability (Diagnostic settings -> LAW)
+- tfstate Storage Account -> LAW
+- Key Vault -> LAW
+- Azure AI Search -> LAW
+- Azure OpenAI -> LAW
 
-- Log Analytics Workspace: `log-azure-genai-secure-landing-zone-dev`.
-- Diagnostic Settings включены для:
-  - Key Vault (`kvgenaidev9307`)
-  - Azure OpenAI (`oaigenaidev9307`)
-  - tfstate Storage Account (`sttfstategenai9307`)
-  - RAG docs Storage Account (`stgenaidocsdev9307`)
-  - Azure AI Search (`srchgenaidev9307`) - **условно**, только когда `enable_search = true` (сейчас Search выключен, поэтому diag тоже отсутствует).
 ### 2.12 Test VM (attempted) - статус
 - VM не создавалась (SKU availability/quota/capacity в westeurope).
 - Orphan NIC nic-vm-test-dev был удален terraform apply, так как ресурс отсутствовал в конфигурации (was not in configuration).
@@ -200,22 +202,18 @@ Backend container: tfstate
 Blob:
 - dev/infra.terraform.tfstate
 
-State содержит (актуально после выключения Search через `enable_search=false`):
-- data.azurerm_client_config.current
-- data.azurerm_monitor_diagnostic_categories.kv
-- data.azurerm_monitor_diagnostic_categories.openai
-- data.azurerm_monitor_diagnostic_categories.tfstate_sa
-- data.azurerm_storage_account.tfstate
-- azapi_resource.rag_docs_container
-- azurerm_cognitive_account.openai
-- azurerm_key_vault.kv
+State содержит (минимум по факту refresh/планов):
+- azurerm_resource_group.core
 - azurerm_log_analytics_workspace.law
-- azurerm_monitor_diagnostic_setting.kv_to_law
-- azurerm_monitor_diagnostic_setting.openai_to_law
-- azurerm_monitor_diagnostic_setting.rag_docs_sa_to_law
-- azurerm_monitor_diagnostic_setting.tfstate_sa_to_law
-- azurerm_network_security_group.private_endpoints
+- azurerm_virtual_network.core
+- azurerm_subnet.workload
+- azurerm_subnet.private_endpoints
+- azurerm_subnet.aci_test
 - azurerm_network_security_group.workload
+- azurerm_network_security_group.private_endpoints
+- azurerm_subnet_network_security_group_association.workload
+- azurerm_subnet_network_security_group_association.private_endpoints
+- azurerm_subnet_network_security_group_association.aci_test
 - azurerm_private_dns_zone.core["blob"]
 - azurerm_private_dns_zone.core["keyvault"]
 - azurerm_private_dns_zone.core["openai"]
@@ -224,17 +222,16 @@ State содержит (актуально после выключения Searc
 - azurerm_private_dns_zone_virtual_network_link.core["keyvault"]
 - azurerm_private_dns_zone_virtual_network_link.core["openai"]
 - azurerm_private_dns_zone_virtual_network_link.core["search"]
+- azurerm_key_vault.kv
+- azurerm_search_service.search
+- azurerm_private_endpoint.search
+- azurerm_cognitive_account.openai
 - azurerm_private_endpoint.openai
-- azurerm_private_endpoint.rag_docs_blob
-- azurerm_resource_group.core
-- azurerm_storage_account.rag_docs
-- azurerm_subnet.aci_test
-- azurerm_subnet.private_endpoints
-- azurerm_subnet.workload
-- azurerm_subnet_network_security_group_association.aci_test
-- azurerm_subnet_network_security_group_association.private_endpoints
-- azurerm_subnet_network_security_group_association.workload
-- azurerm_virtual_network.core
+- azurerm_monitor_diagnostic_setting.tfstate_sa_to_law
+- azurerm_monitor_diagnostic_setting.kv_to_law
+- azurerm_monitor_diagnostic_setting.search_to_law
+- azurerm_monitor_diagnostic_setting.openai_to_law
+
 ## 6) Terraform files (полные тексты)
 
 - 6.1 infra/terraform/backend.tf
@@ -255,8 +252,6 @@ provider "azurerm" {
   features {}
 }
 
-provider "azapi" {}
-
 - 6.3 infra/terraform/versions.tf
 terraform {
   required_version = ">= 1.14, < 2.0"
@@ -266,13 +261,8 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.100"
     }
-    azapi = {
-      source  = "azure/azapi"
-      version = "~> 1.13"
-    }
   }
 }
-
 
 - 6.4 infra/terraform/variables.tf
 variable "location" {
@@ -686,159 +676,3 @@ jobs:
 - Egress для ACI:
   - NAT Gateway + Public IP применялись временно, затем удалены terraform apply.
   - Если в будущем понадобится подтянуть image или пакеты из интернета, NAT может быть добавлен временно снова.
-
-## 9) Day 4 - Cost control и управление Azure AI Search
-
-- По cost analysis в Azure Portal выявлено, что основной потребитель бюджета на текущем этапе - Azure AI Search.
-- Введен feature-flag `enable_search` (в `env/dev/terraform.tfvars`) и применен через Terraform:
-  - `enable_search=false` -> Search service, PE и diagnostic setting уничтожены (plan: 3 to destroy).
-  - `enable_search=true` -> Search service, PE и diagnostic setting создаются (plan: 3 to add).
-- Проверка факта выключения: `terraform state list` не содержит `azurerm_search_service.search` и `azurerm_private_endpoint.search`, при этом Private DNS Zone `core["search"]` и VNet link остаются.
-- Отдельно: ACI использовался как временный compute для проверки Private DNS/подключения, после проверки удален.
-- Важно по VS Code tasks.json: нельзя терять `options.cwd` (якорь) на `infra/terraform`. Любые правки tasks.json делать минимальным diff и сверять целостность до коммита.
-
-- 6.15 infra/terraform/rag-storage-docs.tf
-# RAG documents storage (private-by-default) + Blob Private Endpoint + diagnostics.
-# Storage container creation is done via azapi because azurerm_storage_container
-# fails under strict network rules (403 AuthorizationFailure) when public access is blocked.
-
-resource "azurerm_storage_account" "rag_docs" {
-  name                     = "stgenaidocs${var.env}9307"
-  resource_group_name      = azurerm_resource_group.core.name
-  location                 = azurerm_resource_group.core.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  min_tls_version          = "TLS1_2"
-
-  # Private-by-default:
-  public_network_access_enabled = false
-
-  network_rules {
-    default_action = "Deny"
-    bypass         = ["AzureServices"]
-  }
-
-  tags = local.tags
-}
-
-# Blob private endpoint for the Storage Account
-resource "azurerm_private_endpoint" "rag_docs_blob" {
-  name                = "pe-st-docs-${var.env}"
-  location            = azurerm_resource_group.core.location
-  resource_group_name = azurerm_resource_group.core.name
-  subnet_id           = azurerm_subnet.private_endpoints.id
-
-  private_service_connection {
-    name                           = "psc-st-docs-${var.env}"
-    private_connection_resource_id = azurerm_storage_account.rag_docs.id
-    subresource_names              = ["blob"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "pdzg-st-docs-${var.env}"
-    private_dns_zone_ids = [azurerm_private_dns_zone.core["blob"].id]
-  }
-
-  tags = local.tags
-}
-
-# Storage diagnostics to LAW
-resource "azurerm_monitor_diagnostic_setting" "rag_docs_sa_to_law" {
-  name                       = "diag-st-docs-${var.env}-law"
-  target_resource_id         = azurerm_storage_account.rag_docs.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
-
-  enabled_log {
-    category = "StorageRead"
-  }
-  enabled_log {
-    category = "StorageWrite"
-  }
-  enabled_log {
-    category = "StorageDelete"
-  }
-
-  metric {
-    category = "Transaction"
-    enabled  = true
-  }
-}
-
-# Container creation via azapi (see state: azapi_resource.rag_docs_container)
-resource "azapi_resource" "rag_docs_container" {
-  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01"
-  name      = "docs"
-  parent_id = "${azurerm_storage_account.rag_docs.id}/blobServices/default"
-
-  body = jsonencode({
-    properties = {
-      publicAccess = "None"
-    }
-  })
-}
-
-- 6.16 infra/terraform/ai-search.tf
-# Azure AI Search (main cost driver) - controlled by feature flag enable_search.
-resource "azurerm_search_service" "search" {
-  count = var.enable_search ? 1 : 0
-
-  name                = "srchgenai${var.env}9307"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = azurerm_resource_group.core.location
-
-  sku             = "basic"
-  replica_count   = 1
-  partition_count = 1
-
-  public_network_access_enabled = false
-  local_authentication_enabled  = true
-
-  tags = local.tags
-}
-
-# Diagnostics to LAW (created only when Search is enabled)
-data "azurerm_monitor_diagnostic_categories" "search" {
-  count       = var.enable_search ? 1 : 0
-  resource_id = azurerm_search_service.search[0].id
-}
-
-resource "azurerm_monitor_diagnostic_setting" "search_to_law" {
-  count                      = var.enable_search ? 1 : 0
-  name                       = "diag-search-${var.env}-law"
-  target_resource_id         = azurerm_search_service.search[0].id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
-
-  enabled_log {
-    category = "OperationLogs"
-  }
-
-  metric {
-    category = "AllMetrics"
-    enabled  = true
-  }
-}
-
-- 6.17 infra/terraform/ai-search-private-endpoint.tf
-# Private Endpoint for Azure AI Search - also controlled by enable_search.
-resource "azurerm_private_endpoint" "search" {
-  count               = var.enable_search ? 1 : 0
-  name                = "pe-search-${var.env}"
-  location            = azurerm_resource_group.core.location
-  resource_group_name = azurerm_resource_group.core.name
-  subnet_id           = azurerm_subnet.private_endpoints.id
-
-  private_service_connection {
-    name                           = "psc-search-${var.env}"
-    private_connection_resource_id = azurerm_search_service.search[0].id
-    subresource_names              = ["searchService"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "pdzg-search-${var.env}"
-    private_dns_zone_ids = [azurerm_private_dns_zone.core["search"].id]
-  }
-
-  tags = local.tags
-}

@@ -37,6 +37,7 @@ resource "azapi_resource" "rag_docs_container" {
 }
 
 resource "azurerm_private_endpoint" "rag_docs_blob" {
+  count               = var.enable_private_endpoints ? 1 : 0
   name                = "pe-st-docs-${local.env}"
   resource_group_name = azurerm_resource_group.core.name
   location            = local.location
